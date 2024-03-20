@@ -16,7 +16,7 @@ namespace digiProAssignment2
 
     public class DCTBlock
     {
-        public static int[,] luminanceQTable = { 
+        public static readonly int[,] luminanceQTable = { 
             {16, 11, 10, 16, 24, 40, 51, 61 },
             {12, 12, 14, 19, 26, 58, 60, 55 },
             {14, 13, 16, 24, 40, 57, 69, 56 },
@@ -27,7 +27,7 @@ namespace digiProAssignment2
             {72, 92, 95, 98, 112, 100, 103, 99 }
         };
 
-        public static int[,] chrominanceQTable = { 
+        public static readonly int[,] chrominanceQTable = { 
             {17, 18, 24, 47, 99, 99, 99, 99 },
             {18, 21, 26, 66, 99, 99, 99, 99 },
             {24, 26, 56, 99, 99, 99, 99, 99 },
@@ -102,6 +102,7 @@ namespace digiProAssignment2
                 }
             }
             result.Add(0);
+            result.Add(0);
             return result;
         }
 
@@ -137,6 +138,32 @@ namespace digiProAssignment2
                 {
                     break;
                 }
+            }
+            return result;
+        }
+
+        private List<byte> RLEtoByte(List<Tuple<int, int>> data) {
+            List<byte> result = new List<byte>();
+            for (int i = 0; i < data.Count; i++)
+            {
+                result.Add((byte)(data[i].Item1));
+                result.Add((byte)(data[i].Item2));
+            }
+            result.Add(0);
+            result.Add(0);
+            return result;
+        }
+
+        private List<Tuple<int, int>> ByteToRLE(List<byte> data)
+        {
+            List<Tuple<int, int>> result = new List<Tuple<int, int>>();
+            for (int i = 0; i < data.Count; i += 2)
+            {
+                if (data[i] == 0 && data[i + 1] == 0)
+                {
+                    break;
+                }
+                result.Add(new Tuple<int, int>(data[i], ByteToNegativeInt(data[i + 1])));
             }
             return result;
         }
@@ -316,21 +343,23 @@ namespace digiProAssignment2
 
             for (int i = 0; i < 64; i++)
             {
-                doubleBlock[i / 8, i % 8] -= 128;
+                //doubleBlock[i / 8, i % 8] -= 128;
             }
-            
+
             doubleBlock = dctEncode(doubleBlock, 8, 8);
             quantize();
             orderbyZigZag();
             List<Tuple<int, int>> runLength = RunLengthCoding(zigzagOrdered);
-            entropyEncoded = entropyEncoding(runLength);
+            //entropyEncoded = entropyEncoding(runLength);
+            entropyEncoded = RLEtoByte(runLength);
 
         }
 
         public void decode(List<byte> data)
         {
             List<byte> bytes = data;
-            List<Tuple<int, int>> runLength = entropyDecoding(bytes);
+            //List<Tuple<int, int>> runLength = entropyDecoding(bytes);
+            List<Tuple<int, int>> runLength = ByteToRLE(bytes);
             int[] zigzag = RunLengthDecoding(runLength);
             doubleBlock = unZigZag(zigzag);
             dequantize();
@@ -343,7 +372,7 @@ namespace digiProAssignment2
             }*/
             for (int i = 0; i < 64; i++)
             {
-                doubleBlock[i / 8, i % 8] += 128;
+                //doubleBlock[i / 8, i % 8] += 128;
                 doubleBlock[i / 8, i % 8] = satuaration(doubleBlock[i / 8, i % 8]);
             }
             
@@ -367,31 +396,36 @@ namespace digiProAssignment2
 
         public void quantize()
         {
-            int[,] q = new int[8, 8];
-            if (this.type == BlockType.Y) {
-                q = luminanceQTable;
-            } else {
-                q = chrominanceQTable;
-            }
-            for (int i = 0; i < 64;i++) {
-                doubleBlock[i / 8, i % 8] = Math.Round(doubleBlock[i / 8, i % 8] / q[i / 8, i % 8]);
+            for (int i = 0; i < 8; i++) {
+                for (int j = 0; j < 8; j++)
+                {
+                    if (this.type == BlockType.Y)
+                    {
+                        doubleBlock[i, j] = Math.Round(doubleBlock[i, j] / luminanceQTable[i, j]);
+                    }
+                    else
+                    {
+                        doubleBlock[i, j] = Math.Round(doubleBlock[i, j] / chrominanceQTable[i, j]);
+                    }
+                }
             }
         }
 
         public void dequantize()
         {
-            int[,] q = new int[8, 8];
-            if (this.type == BlockType.Y)
+            for (int i = 0; i < 8; i++)
             {
-                q = luminanceQTable;
-            }
-            else
-            {
-                q = chrominanceQTable;
-            }
-            for (int i = 0; i < 64; i++)
-            {
-                doubleBlock[i / 8, i % 8] = Math.Round(doubleBlock[i / 8, i % 8] * q[i / 8, i % 8]);
+                for (int j = 0; j < 8; j++)
+                {
+                    if (this.type == BlockType.Y)
+                    {
+                        doubleBlock[i, j] = Math.Round(doubleBlock[i, j] * luminanceQTable[i, j]);
+                    }
+                    else
+                    {
+                        doubleBlock[i, j] = Math.Round(doubleBlock[i, j] * chrominanceQTable[i, j]);
+                    }
+                }
             }
         }
 

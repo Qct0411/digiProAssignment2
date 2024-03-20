@@ -10,6 +10,11 @@ namespace digiProAssignment2
 {
     public class JPEG_Compression
     {
+        private readonly static double[,] YCrCbtoRGB = {
+            { 1, 0, 1.4 },
+            { 1, -0.343, -0.711 },
+            { 1, 1.765, 0 }
+        };
         public static byte[] convertRGBToYCbCr(Bitmap bitmap)
         {
             int width = bitmap.Width;
@@ -144,7 +149,7 @@ namespace digiProAssignment2
             return result;
         }
 
-        public static Bitmap convertYCbCrToRGBv2(List<double> data, int width, int height)
+        public static Bitmap convertYCbCrToRGBv2(List<double> ycrcb, int width, int height)
         {
             Bitmap result = new Bitmap(width, height);
 
@@ -152,48 +157,59 @@ namespace digiProAssignment2
             double[,] Cb = new double[width / 2, height / 2];
             double[,] Cr = new double[width / 2, height / 2];
 
-            int index = 0;
-            for (int i = 0; i < height; i++)
+            int i = 0;
+            for (int y = 0; y < height; y++)
             {
-                for (int j = 0; j < width; j++)
+                for (int x = 0; x < width; x++)
                 {
-                    Y[j, i] = data[index++];
+                    Y[x, y] = ycrcb[i++];
                 }
             }
-            Debug.WriteLine("Index: " + index);
-            for (int i = 0; i < height / 2; i++)
+            for (int y = 0; y < height / 2; y++)
             {
-                for (int j = 0; j < width / 2; j++)
+                for (int x = 0; x < width / 2; x++)
                 {
-                    Cb[j, i] = data[index++];
+                    Cb[x, y] = ycrcb[i++];
                 }
             }
-            Debug.WriteLine("Index: " + index);
-            for (int i = 0; i < height / 2; i++)
+            for (int y = 0; y < height / 2; y++)
             {
-                for (int j = 0; j < width / 2; j++)
+                for (int x = 0; x < width / 2; x++)
                 {
-                    Cr[j, i] = data[index++];
+                    Cr[x, y] = ycrcb[i++];
                 }
             }
 
             Cb = upsample(Cb);
             Cr = upsample(Cr);
 
-            for (int i = 0; i < width; i++)
+            for (int y = 0; y < height; y++)
             {
-                for (int j = 0; j < height; j++)
+                for (int x = 0; x < width; x++)
                 {
-                    int r = (int)(Y[i, j] + 1.402 * (Cr[i, j] - 128));
-                    int g = (int)(Y[i, j] - 0.343 * (Cb[i, j] - 128) - 0.711 * (Cr[i, j] - 128));
-                    int b = (int)(Y[i, j] + 1.765 * (Cb[i, j] - 128));
+
+                    double yValue = Y[x, y];
+                    double cbValue = Cb[x, y] - 128;
+                    double crValue = Cr[x, y] - 128;
+
+                    double r = YCrCbtoRGB[0, 0] * yValue +
+                       YCrCbtoRGB[0, 1] * cbValue +
+                       YCrCbtoRGB[0, 2] * crValue;
+
+                    double g = YCrCbtoRGB[1, 0] * yValue +
+                               YCrCbtoRGB[1, 1] * cbValue +
+                               YCrCbtoRGB[1, 2] * crValue;
+
+                    double b = YCrCbtoRGB[2, 0] * yValue +
+                               YCrCbtoRGB[2, 1] * cbValue +
+                               YCrCbtoRGB[2, 2] * crValue;
 
                     r = Math.Max(0, Math.Min(255, r));
                     g = Math.Max(0, Math.Min(255, g));
                     b = Math.Max(0, Math.Min(255, b));
                     //Debug.WriteLine(r + " " + g + " " + b);
 
-                    result.SetPixel(i, j, Color.FromArgb(r, g, b));
+                    result.SetPixel(x, y, Color.FromArgb((int)r, (int)g, (int)b));
                 }
             }
 
@@ -235,20 +251,10 @@ namespace digiProAssignment2
             List<DCTBlock> result = new List<DCTBlock>();
             int index = 0;
 
-            /*            for (int i = 0; i < bytes.Length; i++)
-                        {
-                            if (i % 64 == 0 && i != 0)
-                            {
-                                DCTBlock dct = new DCTBlock(block, i / 64);
-                                result[index++] = dct;
-                                block = new byte[64];
-                                Populate(block, (byte)0);
-                            }
-                            block[i % 64] = bytes[i];
-                        }*/
-
             for (int i = 0; i < width * height; i++)
             {
+
+                //block[i % 64] = bytes[index++];
                 if (i % 64 == 0 && i != 0)
                 {
                     DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Y);
@@ -256,10 +262,20 @@ namespace digiProAssignment2
                     block = new byte[64];
                     Populate(block, (byte)0);
                 }
+
                 block[i % 64] = bytes[index++];
+                if (i == width * height - 1)
+                {
+                    DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Y);
+                    result.Add(dct);
+                    block = new byte[64];
+                    Populate(block, (byte)0);
+                }
             }
+            Debug.WriteLine("Index y: " + result.Count);
             for (int i = 0; i < (height*width)/4; i++)
             {
+                //block[i % 64] = bytes[index++];
                 if (i % 64 == 0 && i != 0)
                 {
                     DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Cb);
@@ -268,9 +284,18 @@ namespace digiProAssignment2
                     Populate(block, (byte)0);
                 }
                 block[i % 64] = bytes[index++];
+                if (i == ((height * width) / 4) - 1)
+                {
+                    DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Cb);
+                    result.Add(dct);
+                    block = new byte[64];
+                    Populate(block, (byte)0);
+                }
             }
+            Debug.WriteLine("Index cr: " + result.Count);
             for (int i = 0; i < (height * width) / 4; i++)
             {
+                //block[i % 64] = bytes[index++];
                 if (i % 64 == 0 && i != 0)
                 {
                     DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Cr);
@@ -279,7 +304,15 @@ namespace digiProAssignment2
                     Populate(block, (byte)0);
                 }
                 block[i % 64] = bytes[index++];
+                if (i == ((height * width) / 4) - 1)
+                {
+                    DCTBlock dct = new DCTBlock(block, index / 64, BlockType.Cr);
+                    result.Add(dct);
+                    block = new byte[64];
+                    Populate(block, (byte)0);
+                }
             }
+            Debug.WriteLine("Index cb: " + result.Count);
             return result;
         }
 
@@ -311,24 +344,29 @@ namespace digiProAssignment2
             List<double> decodedData = new List<double>();
             List<List<byte>> blocks = new List<List<byte>>();
             List<byte> dataBlock = new List<byte>();
-            for (int i = 0; i < data.Length; i ++)
+            for (int i = 0; i < data.Length; i++)
             {
-                dataBlock.Add(data[i]);
-                if (data[i] == 0 && i != 0)
+                if (data[i] == 0 && data[i + 1] == 0)
                 {
                     blocks.Add(dataBlock);
                     dataBlock = new List<byte>();
+                    i++;
+                }
+                else {
+                    dataBlock.Add(data[i++]);
+                    dataBlock.Add(data[i]);
+
                 }
 
             }
             List<byte> yvalue = new List<byte>();
             int limit = width * height;
             int count = 0;
+            int index2 = 0;
             for (int i = 0; i < (width * height)/64; i++) {
                 DCTBlock block = new DCTBlock(index, BlockType.Y);
-                block.decode(blocks[i]);
-                
-                if (count >= limit)
+                block.decode(blocks[index2++]);
+                if (count >= limit) // (count < limit) (?)
                 {
                     List<double> temp = block.convertToArrayFromBlock();
                     temp.RemoveRange(limit - count, temp.Count - (limit - count));
@@ -346,11 +384,11 @@ namespace digiProAssignment2
             count = 0;
             limit = (width * height) / 4;
 
-            for (int i = 0; i < (width * height) / 64; i++)
+            for (int i = 0; i < (width * height) / 4 / 64; i++)
             {
                 DCTBlock block = new DCTBlock(index, BlockType.Cb);
-                block.decode(blocks[i]);
-                
+                block.decode(blocks[index2++]);
+
                 if (count >= limit)
                 {
                     List<double> temp = block.convertToArrayFromBlock();
@@ -369,10 +407,10 @@ namespace digiProAssignment2
             Debug.WriteLine("Cb Count: " + decodedData.Count);
             count = 0;
             limit = (width * height) / 4;
-            for (int i = 0; i < (width * height) / 64; i++)
+            for (int i = 0; i < (width * height) / 4 / 64; i++)
             {
                 DCTBlock block = new DCTBlock(index, BlockType.Cr);
-                block.decode(blocks[i]);
+                block.decode(blocks[index2++]);
                 
                 if (count >= limit)
                 {
@@ -387,6 +425,10 @@ namespace digiProAssignment2
                     decodedData.AddRange(temp);
                 }
                 count += 64;
+                if (index2 >= blocks.Count)
+                {
+                    break;
+                }
 
             }
             Debug.WriteLine("Cr Count: " + decodedData.Count);
